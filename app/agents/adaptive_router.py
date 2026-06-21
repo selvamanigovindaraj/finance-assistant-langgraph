@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import MessagesState
 
@@ -20,9 +21,9 @@ def _build_graph() -> StateGraph:
         api_key=settings.ANTHROPIC_API_KEY,
     )
 
-    def call_model(state: MessagesState) -> dict[str, list[BaseMessage]]:
+    def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
         messages: list[BaseMessage] = [SystemMessage(content=_SYSTEM_PROMPT)] + state["messages"]
-        response = llm.invoke(messages)
+        response = llm.invoke(messages, config)
         return {"messages": [response]}
 
     graph = StateGraph(MessagesState)
@@ -35,13 +36,14 @@ def _build_graph() -> StateGraph:
 _graph = _build_graph()
 
 
-async def run_agent(messages: list[dict[str, str]]) -> tuple[str, dict]:
+async def run_agent(messages: list[dict[str, str]], session_id: str = "") -> tuple[str, dict]:
     """Invoke the compiled graph and return (answer_text, usage_metadata)."""
     lc_messages: list[BaseMessage] = [
         HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
         for m in messages
     ]
-    result = await _graph.ainvoke({"messages": lc_messages})
+    config = {"metadata": {"session_id": session_id}} if session_id else {}
+    result = await _graph.ainvoke({"messages": lc_messages}, config)
     last: AIMessage = result["messages"][-1]
     usage = last.usage_metadata or {}
     return last.content, usage

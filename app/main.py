@@ -72,7 +72,7 @@ async def chat(body: ChatRequest) -> ChatResponse:
     messages = [{"role": m.role.value, "content": m.content} for m in body.messages]
 
     try:
-        answer, usage = await run_agent(messages)
+        answer, usage = await run_agent(messages, session_id=body.session_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
