@@ -84,6 +84,16 @@ The graph is compiled once at module import (`_graph = _build_graph()`) and reus
 | Security | Stub — input guard, output filter all `raise NotImplementedError` |
 | Frontend | Stub — all components return `<></>`, hooks throw |
 
+## Coding principles
+
+These principles apply to all generated code, in every language:
+
+- **KISS** — Start with the simplest solution that works. Add complexity only when a concrete requirement demands it, not in anticipation of one.
+- **DRY** — Extract repeated logic into a single authoritative place. Every piece of knowledge should have one representation.
+- **YAGNI** — Build only what the current task requires. Do not add hooks, abstractions, or configuration points for hypothetical future needs.
+- **Separation of Concerns** — Each module, class, or function should have one reason to change. Keep I/O, business logic, and presentation in separate layers so each can be tested and changed independently.
+- **Law of Demeter** — A unit should interact only with its immediate collaborators. Avoid chaining through internal structure (`a.b.c.do()`); pass what is needed or expose a higher-level method instead.
+
 ## Code style (from `.claude/rules/`)
 
 **Python**
