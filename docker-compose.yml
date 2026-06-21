@@ -19,8 +19,11 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
+    environment:
+      - VITE_API_TARGET=http://backend:8000
     volumes:
-      - ./frontend/src:/app/src  # HMR: Vite picks up source changes instantly
+      - ./frontend:/app                  # full mount: src + config files hot-reload
+      - /app/node_modules                # preserve container's node_modules
     depends_on:
       - backend
     restart: unless-stopped

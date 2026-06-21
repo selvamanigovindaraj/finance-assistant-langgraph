@@ -13,12 +13,31 @@ from app.models import ChatRequest, ChatResponse, FeedbackRequest, FeedbackRespo
 
 
 def _configure_langsmith() -> None:
-    """Push LangSmith settings into os.environ so LangChain picks them up."""
-    os.environ["LANGCHAIN_TRACING_V2"] = str(settings.LANGCHAIN_TRACING_V2).lower()
-    os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
-    os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
-    if settings.LANGCHAIN_API_KEY:
-        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+    """Push LangSmith settings into os.environ so LangChain picks them up.
+
+    Supports both the old LANGCHAIN_* naming and the new LANGSMITH_* naming
+    introduced in langsmith >= 0.1.  Sets both so any SDK version works.
+    """
+    # Resolve values: prefer new LANGSMITH_* names, fall back to old LANGCHAIN_* names
+    tracing = settings.LANGSMITH_TRACING or ("true" if settings.LANGCHAIN_TRACING_V2 else "")
+    api_key = settings.LANGSMITH_API_KEY or settings.LANGCHAIN_API_KEY
+    project = settings.LANGSMITH_PROJECT or settings.LANGCHAIN_PROJECT or "ai-agent"
+    endpoint = (
+        settings.LANGSMITH_ENDPOINT
+        or settings.LANGCHAIN_ENDPOINT
+        or "https://api.smith.langchain.com"
+    )
+
+    if tracing.lower() == "true":
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGSMITH_TRACING"] = "true"
+    if api_key:
+        os.environ["LANGCHAIN_API_KEY"] = api_key
+        os.environ["LANGSMITH_API_KEY"] = api_key
+    os.environ["LANGCHAIN_PROJECT"] = project
+    os.environ["LANGSMITH_PROJECT"] = project
+    os.environ["LANGCHAIN_ENDPOINT"] = endpoint
+    os.environ["LANGSMITH_ENDPOINT"] = endpoint
 
 
 @asynccontextmanager

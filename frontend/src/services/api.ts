@@ -1,23 +1,33 @@
-import type { ChatSession, FeedbackPayload, Message } from "../types";
+import type { FeedbackPayload, Message } from "../types";
 
 const BASE_URL = "/api";
 
 export async function sendMessage(
-  _messages: Message[],
-  _sessionId: string
-): Promise<{ answer: string; sources: unknown[]; sessionId: string }> {
-  // TODO: POST /chat
-  throw new Error("Not implemented");
+  messages: Message[],
+  sessionId: string
+): Promise<{ answer: string; session_id: string; usage: Record<string, unknown> }> {
+  const res = await fetch(`${BASE_URL}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      session_id: sessionId,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((err as { detail?: string }).detail ?? "Request failed");
+  }
+  return res.json() as Promise<{ answer: string; session_id: string; usage: Record<string, unknown> }>;
 }
 
-export async function submitFeedback(_payload: FeedbackPayload): Promise<void> {
-  // TODO: POST /feedback
-  throw new Error("Not implemented");
-}
-
-export async function fetchSessions(): Promise<ChatSession[]> {
-  // TODO: GET /sessions
-  throw new Error("Not implemented");
+export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
+  const res = await fetch(`${BASE_URL}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Feedback submission failed");
 }
 
 export { BASE_URL };

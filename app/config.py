@@ -17,11 +17,15 @@ class Settings(BaseSettings):
     # Tavily
     TAVILY_API_KEY: str = ""
 
-    # LangSmith
+    # LangSmith — supports both old (LANGCHAIN_*) and new (LANGSMITH_*) naming
     LANGCHAIN_TRACING_V2: bool = False
     LANGCHAIN_API_KEY: str = ""
-    LANGCHAIN_PROJECT: str = "ai-agent"
-    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGCHAIN_PROJECT: str = ""
+    LANGCHAIN_ENDPOINT: str = ""
+    LANGSMITH_TRACING: str = ""        # "true" / "false" (new SDK naming)
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = ""
+    LANGSMITH_ENDPOINT: str = ""
 
     # App
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]

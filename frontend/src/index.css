@@ -1,15 +1,69 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: 16px;
   line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
+  color-scheme: light;
+  background-color: #FFFBFE;
+  color: #1C1B1F;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
 }
+
+/* MD3 ripple-style focus ring */
+:focus-visible {
+  outline: 2px solid #6750A4;
+  outline-offset: 2px;
+}
+
+/* MD3 state layer hover/pressed utilities */
+@layer utilities {
+  .state-hover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .state-hover:hover::after {
+    opacity: 0.08;
+  }
+  .state-hover:active::after {
+    opacity: 0.12;
+  }
+
+  /* MD3 typography scale */
+  .md-display-large   { font-size: 3.5625rem; font-weight: 400; letter-spacing: -0.016rem; line-height: 4rem; }
+  .md-headline-large  { font-size: 2rem;      font-weight: 400; letter-spacing: 0;          line-height: 2.5rem; }
+  .md-headline-medium { font-size: 1.75rem;   font-weight: 400; letter-spacing: 0;          line-height: 2.25rem; }
+  .md-title-large     { font-size: 1.375rem;  font-weight: 400; letter-spacing: 0;          line-height: 1.75rem; }
+  .md-title-medium    { font-size: 1rem;      font-weight: 500; letter-spacing: 0.009rem;   line-height: 1.5rem; }
+  .md-title-small     { font-size: 0.875rem;  font-weight: 500; letter-spacing: 0.006rem;   line-height: 1.25rem; }
+  .md-body-large      { font-size: 1rem;      font-weight: 400; letter-spacing: 0.031rem;   line-height: 1.5rem; }
+  .md-body-medium     { font-size: 0.875rem;  font-weight: 400; letter-spacing: 0.016rem;   line-height: 1.25rem; }
+  .md-body-small      { font-size: 0.75rem;   font-weight: 400; letter-spacing: 0.025rem;   line-height: 1rem; }
+  .md-label-large     { font-size: 0.875rem;  font-weight: 500; letter-spacing: 0.006rem;   line-height: 1.25rem; }
+  .md-label-medium    { font-size: 0.75rem;   font-weight: 500; letter-spacing: 0.031rem;   line-height: 1rem; }
+  .md-label-small     { font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.031rem;   line-height: 1rem; }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CAC4D0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #79747E; }
