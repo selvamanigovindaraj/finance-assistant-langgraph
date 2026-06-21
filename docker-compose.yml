@@ -8,15 +8,19 @@ services:
     env_file:
       - .env
     volumes:
+      - ./app:/app/app          # live-reload: local edits reflected immediately
       - ./data:/app/data:ro
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
-      - "5173:80"
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src  # HMR: Vite picks up source changes instantly
     depends_on:
       - backend
     restart: unless-stopped

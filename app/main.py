@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +11,23 @@ from app.agents.adaptive_router import run_agent
 from app.config import settings
 from app.models import ChatRequest, ChatResponse, FeedbackRequest, FeedbackResponse
 
-app = FastAPI(title="AI Agent API", version="0.1.0")
+
+def _configure_langsmith() -> None:
+    """Push LangSmith settings into os.environ so LangChain picks them up."""
+    os.environ["LANGCHAIN_TRACING_V2"] = str(settings.LANGCHAIN_TRACING_V2).lower()
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
+    os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+    if settings.LANGCHAIN_API_KEY:
+        os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    _configure_langsmith()
+    yield
+
+
+app = FastAPI(title="AI Agent API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

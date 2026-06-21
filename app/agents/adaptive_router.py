@@ -16,7 +16,7 @@ _SYSTEM_PROMPT = (
 
 def _build_graph() -> StateGraph:
     llm = ChatAnthropic(
-        model=settings.CLAUDE_GENERATION_MODEL,
+        model=settings.CLAUDE_ROUTING_MODEL,
         api_key=settings.ANTHROPIC_API_KEY,
     )
 

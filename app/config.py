@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # Tavily
     TAVILY_API_KEY: str = ""
 
+    # LangSmith
+    LANGCHAIN_TRACING_V2: bool = False
+    LANGCHAIN_API_KEY: str = ""
+    LANGCHAIN_PROJECT: str = "ai-agent"
+    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+
     # App
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
     LOG_LEVEL: str = "INFO"
