@@ -1,30 +1,47 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import MessagesState
 
-from langgraph.graph import StateGraph
+from app.config import settings
 
-if TYPE_CHECKING:
-    from app.models import ChatRequest, ChatResponse
+_SYSTEM_PROMPT = (
+    "You are a knowledgeable financial assistant. "
+    "Answer questions clearly and concisely. "
+    "If you are unsure, say so — do not fabricate facts."
+)
 
 
-RouteDecision = Literal["vector_search", "web_search", "financial_data", "direct"]
+def _build_graph() -> StateGraph:
+    llm = ChatAnthropic(
+        model=settings.CLAUDE_GENERATION_MODEL,
+        api_key=settings.ANTHROPIC_API_KEY,
+    )
+
+    def call_model(state: MessagesState) -> dict[str, list[BaseMessage]]:
+        messages: list[BaseMessage] = [SystemMessage(content=_SYSTEM_PROMPT)] + state["messages"]
+        response = llm.invoke(messages)
+        return {"messages": [response]}
+
+    graph = StateGraph(MessagesState)
+    graph.add_node("agent", call_model)
+    graph.set_entry_point("agent")
+    graph.add_edge("agent", END)
+    return graph.compile()
 
 
-class AdaptiveRouter:
-    """Routes incoming queries to the appropriate tool using a lightweight model."""
+_graph = _build_graph()
 
-    def __init__(self) -> None:
-        self._graph: StateGraph | None = None
 
-    def build_graph(self) -> StateGraph:
-        """Construct and compile the LangGraph routing graph."""
-        raise NotImplementedError
-
-    async def route(self, request: ChatRequest) -> RouteDecision:
-        """Classify the query and return the best tool route."""
-        raise NotImplementedError
-
-    async def run(self, request: ChatRequest) -> ChatResponse:
-        """Execute the full agent loop and return a final response."""
-        raise NotImplementedError
+async def run_agent(messages: list[dict[str, str]]) -> tuple[str, dict]:
+    """Invoke the compiled graph and return (answer_text, usage_metadata)."""
+    lc_messages: list[BaseMessage] = [
+        HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
+        for m in messages
+    ]
+    result = await _graph.ainvoke({"messages": lc_messages})
+    last: AIMessage = result["messages"][-1]
+    usage = last.usage_metadata or {}
+    return last.content, usage
