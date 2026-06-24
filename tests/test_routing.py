@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 import app.agents.adaptive_router as _router_mod
-from app.agents.adaptive_router import init_graph, run_agent
+from app.agents.adaptive_router import _DISCLAIMER, init_graph, run_agent
 
 _PATCH_LLM = "app.agents.adaptive_router.ChatOpenAI"
 _PATCH_YF = "app.agents.tools.financial_data.yf.Ticker"
@@ -72,7 +72,7 @@ async def test_direct_response_returns_answer(mock_llm: MagicMock) -> None:
 
     answer, _ = await run_agent([_msg("user", "What is inflation?")])
 
-    assert answer == "Inflation is a rise in prices."
+    assert answer.startswith("Inflation is a rise in prices.")
 
 
 async def test_direct_response_llm_invoked_once(mock_llm: MagicMock) -> None:
@@ -83,6 +83,33 @@ async def test_direct_response_llm_invoked_once(mock_llm: MagicMock) -> None:
     await run_agent([_msg("user", "Explain diversification.")])
 
     assert mock_llm.invoke.call_count == 1
+
+
+# ─── Output guardrail ──────────────────────────────────────────────────────────
+
+
+async def test_disclaimer_appended_to_every_response(mock_llm: MagicMock) -> None:
+    mock_llm.invoke.return_value = AIMessage(content="Some financial insight.")
+    with patch(_PATCH_LLM, return_value=mock_llm):
+        init_graph(InMemorySaver())
+
+    answer, _ = await run_agent([_msg("user", "Tell me about bonds.")])
+
+    assert answer.endswith(_DISCLAIMER)
+
+
+async def test_disclaimer_appended_after_tool_response(mock_llm: MagicMock) -> None:
+    mock_llm.invoke.side_effect = [
+        _make_tool_call_msg("get_quote", {"ticker": "AAPL"}),
+        AIMessage(content="AAPL is $150."),
+    ]
+    with patch(_PATCH_LLM, return_value=mock_llm):
+        init_graph(InMemorySaver())
+
+    with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
+        answer, _ = await run_agent([_msg("user", "Price of AAPL?")])
+
+    assert answer.endswith(_DISCLAIMER)
 
 
 # ─── get_quote routing ─────────────────────────────────────────────────────────
@@ -99,7 +126,7 @@ async def test_routes_to_get_quote(mock_llm: MagicMock) -> None:
     with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
         answer, _ = await run_agent([_msg("user", "What is the price of AAPL?")])
 
-    assert answer == "AAPL is trading at $150."
+    assert answer.startswith("AAPL is trading at $150.")
 
 
 async def test_get_quote_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
@@ -132,7 +159,7 @@ async def test_routes_to_budget_calc(mock_llm: MagicMock) -> None:
 
     answer, _ = await run_agent([_msg("user", "Analyse my budget.")])
 
-    assert answer == "Your monthly surplus is $3000."
+    assert answer.startswith("Your monthly surplus is $3000.")
 
 
 async def test_budget_calc_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
@@ -167,7 +194,7 @@ async def test_routes_to_categorise_expense(mock_llm: MagicMock) -> None:
 
     answer, _ = await run_agent([_msg("user", "Categorise my Netflix charge.")])
 
-    assert answer == "This is an entertainment expense."
+    assert answer.startswith("This is an entertainment expense.")
 
 
 async def test_categorise_expense_triggers_two_llm_calls(mock_llm: MagicMock) -> None:

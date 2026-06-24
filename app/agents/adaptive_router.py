@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import StateGraph
+from langgraph.graph import END, StateGraph
 from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -30,8 +30,23 @@ _SYSTEM_PROMPT = (
 )
 
 _TOOLS = [get_quote, budget_calc, categorise_expense]
+_DISCLAIMER = (
+    "\n\n⚠️ This is for informational purposes only and does not constitute financial advice."
+)
 
 _graph: CompiledStateGraph[Any, Any, Any] | None = None
+
+
+def _guardrail_out(state: MessagesState) -> dict[str, list[BaseMessage]]:
+    last = cast(AIMessage, state["messages"][-1])
+    raw = last.content
+    safe_content = raw if isinstance(raw, str) else str(raw)
+    disclaimed = AIMessage(
+        id=last.id,
+        content=safe_content + _DISCLAIMER,
+        usage_metadata=last.usage_metadata,
+    )
+    return {"messages": [disclaimed]}
 
 
 def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
@@ -50,9 +65,11 @@ def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[A
     graph = StateGraph(MessagesState)
     graph.add_node("agent", call_model)
     graph.add_node("tools", ToolNode(_TOOLS, handle_tool_errors=True))
+    graph.add_node("guardrail_out", _guardrail_out)
     graph.set_entry_point("agent")
-    graph.add_conditional_edges("agent", tools_condition)
+    graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: "guardrail_out"})
     graph.add_edge("tools", "agent")
+    graph.add_edge("guardrail_out", END)
     return graph.compile(checkpointer=checkpointer)
 
 
