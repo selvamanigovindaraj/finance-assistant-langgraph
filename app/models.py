@@ -22,7 +22,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     """Incoming chat request body."""
 
-    messages: list[Message]
+    messages: list[Message] = Field(..., min_length=1)
     session_id: str = Field(default="", description="Optional session identifier")
     stream: bool = False
 

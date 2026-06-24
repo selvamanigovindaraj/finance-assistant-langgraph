@@ -36,8 +36,9 @@ _graph: CompiledStateGraph[Any, Any, Any] | None = None
 
 def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
     llm = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=SecretStr(settings.OPENAI_API_KEY),
+        model=settings.DEEPSEEK_MODEL,
+        api_key=SecretStr(settings.DEEPSEEK_API_KEY),
+        base_url=settings.DEEPSEEK_ENDPOINT,
     ).bind_tools(_TOOLS)
 
     def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
@@ -61,6 +62,12 @@ def init_graph(checkpointer: BaseCheckpointSaver[Any]) -> None:
     _graph = _build_graph(checkpointer)
 
 
+def _to_lc(msg: dict[str, str]) -> BaseMessage:
+    if msg["role"] == "user":
+        return HumanMessage(content=msg["content"])
+    return AIMessage(content=msg["content"])
+
+
 async def run_agent(
     messages: list[dict[str, str]], session_id: str = ""
 ) -> tuple[str, dict[str, Any]]:
@@ -68,26 +75,17 @@ async def run_agent(
     assert _graph is not None, "init_graph() must be called before run_agent()"
 
     if session_id:
-        raw = messages[-1]
-        lc_messages: list[BaseMessage] = [
-            HumanMessage(content=raw["content"])
-            if raw["role"] == "user"
-            else AIMessage(content=raw["content"])
-        ]
+        lc_messages: list[BaseMessage] = [_to_lc(messages[-1])]
         config: RunnableConfig = {
             "configurable": {"thread_id": session_id},
             "metadata": {"session_id": session_id},
         }
     else:
-        lc_messages = [
-            HumanMessage(content=m["content"])
-            if m["role"] == "user"
-            else AIMessage(content=m["content"])
-            for m in messages
-        ]
+        lc_messages = [_to_lc(m) for m in messages]
         config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
     result = await _graph.ainvoke({"messages": lc_messages}, config)
     last: AIMessage = result["messages"][-1]
     usage: dict[str, Any] = dict(last.usage_metadata) if last.usage_metadata else {}
-    return cast(str, last.content), usage
+    content = last.content
+    return content if isinstance(content, str) else str(content), usage

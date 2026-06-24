@@ -1,73 +1,26 @@
 from __future__ import annotations
 
-import os
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import logging
+import traceback
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.agents.adaptive_router import init_graph, run_agent
 from app.config import settings
-from app.models import ChatRequest, ChatResponse, FeedbackRequest, FeedbackResponse
-from app.security.input_guard import InputGuard
+from app.core.lifespan import lifespan
+from app.routers import chat, feedback, health
 
-_guard = InputGuard()
-
-
-def _configure_langsmith() -> None:
-    """Push LangSmith settings into os.environ so LangChain picks them up.
-
-    Supports both the old LANGCHAIN_* naming and the new LANGSMITH_* naming
-    introduced in langsmith >= 0.1.  Sets both so any SDK version works.
-    """
-    # Resolve values: prefer new LANGSMITH_* names, fall back to old LANGCHAIN_* names
-    tracing = settings.LANGSMITH_TRACING or ("true" if settings.LANGCHAIN_TRACING_V2 else "")
-    api_key = settings.LANGSMITH_API_KEY or settings.LANGCHAIN_API_KEY
-    project = settings.LANGSMITH_PROJECT or settings.LANGCHAIN_PROJECT or "ai-agent"
-    endpoint = (
-        settings.LANGSMITH_ENDPOINT
-        or settings.LANGCHAIN_ENDPOINT
-        or "https://api.smith.langchain.com"
-    )
-
-    if tracing.lower() == "true":
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGSMITH_TRACING"] = "true"
-    if api_key:
-        os.environ["LANGCHAIN_API_KEY"] = api_key
-        os.environ["LANGSMITH_API_KEY"] = api_key
-    os.environ["LANGCHAIN_PROJECT"] = project
-    os.environ["LANGSMITH_PROJECT"] = project
-    os.environ["LANGCHAIN_ENDPOINT"] = endpoint
-    os.environ["LANGSMITH_ENDPOINT"] = endpoint
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    _configure_langsmith()
-
-    if settings.DATABASE_URL:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-        from app.db import close_pool, open_pool
-
-        pool = await open_pool(settings.DATABASE_URL)
-        pg_checkpointer = AsyncPostgresSaver(pool)
-        await pg_checkpointer.setup()
-        init_graph(pg_checkpointer)
-        try:
-            yield
-        finally:
-            await close_pool(pool)
-    else:
-        from langgraph.checkpoint.memory import InMemorySaver
-
-        init_graph(InMemorySaver())
-        yield
-
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Agent API", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled exception:\n%s", traceback.format_exc())
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,36 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/health")
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
-
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest) -> ChatResponse:
-    """Run the LangGraph agent and return the assistant reply."""
-    if not body.messages:
-        raise HTTPException(status_code=422, detail="messages must not be empty")
-
-    body = await _guard.check(body)
-    messages = [{"role": m.role.value, "content": m.content} for m in body.messages]
-
-    try:
-        answer, usage = await run_agent(messages, session_id=body.session_id)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    return ChatResponse(
-        answer=answer,
-        session_id=body.session_id,
-        usage=dict(usage),
-    )
-
-
-@app.post("/feedback", response_model=FeedbackResponse)
-async def submit_feedback(body: FeedbackRequest) -> FeedbackResponse:
-    """Record thumbs-up / thumbs-down feedback for a response."""
-    # TODO: persist to FeedbackStore
-    return FeedbackResponse(recorded=True)
+app.include_router(health.router)
+app.include_router(chat.router)
+app.include_router(feedback.router)

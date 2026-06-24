@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -20,6 +21,10 @@ _VALID_YF_INFO: dict[str, Any] = {
 }
 
 
+def _msg(role: str, content: str) -> dict[str, str]:
+    return {"role": role, "content": content}
+
+
 def _make_yf_ticker(info: dict[str, Any]) -> MagicMock:
     m = MagicMock()
     m.info = info
@@ -34,7 +39,7 @@ def _make_tool_call_msg(name: str, args: dict[str, Any], call_id: str = "call_00
 
 
 @pytest.fixture(autouse=True)
-def reset_graph() -> Any:
+def reset_graph() -> Generator[None, None, None]:
     """Isolate each test by resetting the module-level _graph before and after."""
     _router_mod._graph = None
     yield
@@ -54,7 +59,7 @@ def mock_llm() -> MagicMock:
 
 async def test_run_agent_before_init_raises() -> None:
     with pytest.raises(AssertionError, match="init_graph"):
-        await run_agent([{"role": "user", "content": "hello"}])
+        await run_agent([_msg("user", "hello")])
 
 
 # ─── Direct response (no tool call) ───────────────────────────────────────────
@@ -65,7 +70,7 @@ async def test_direct_response_returns_answer(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([{"role": "user", "content": "What is inflation?"}])
+    answer, _ = await run_agent([_msg("user", "What is inflation?")])
 
     assert answer == "Inflation is a rise in prices."
 
@@ -75,7 +80,7 @@ async def test_direct_response_llm_invoked_once(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    await run_agent([{"role": "user", "content": "Explain diversification."}])
+    await run_agent([_msg("user", "Explain diversification.")])
 
     assert mock_llm.invoke.call_count == 1
 
@@ -92,7 +97,7 @@ async def test_routes_to_get_quote(mock_llm: MagicMock) -> None:
         init_graph(InMemorySaver())
 
     with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
-        answer, _ = await run_agent([{"role": "user", "content": "What is the price of AAPL?"}])
+        answer, _ = await run_agent([_msg("user", "What is the price of AAPL?")])
 
     assert answer == "AAPL is trading at $150."
 
@@ -106,9 +111,8 @@ async def test_get_quote_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
         init_graph(InMemorySaver())
 
     with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
-        await run_agent([{"role": "user", "content": "Price of AAPL?"}])
+        await run_agent([_msg("user", "Price of AAPL?")])
 
-    # first call: decide to use get_quote; second call: incorporate tool result
     assert mock_llm.invoke.call_count == 2
 
 
@@ -126,7 +130,7 @@ async def test_routes_to_budget_calc(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([{"role": "user", "content": "Analyse my budget."}])
+    answer, _ = await run_agent([_msg("user", "Analyse my budget.")])
 
     assert answer == "Your monthly surplus is $3000."
 
@@ -142,7 +146,7 @@ async def test_budget_calc_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    await run_agent([{"role": "user", "content": "Calculate my surplus."}])
+    await run_agent([_msg("user", "Calculate my surplus.")])
 
     assert mock_llm.invoke.call_count == 2
 
@@ -161,7 +165,7 @@ async def test_routes_to_categorise_expense(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([{"role": "user", "content": "Categorise my Netflix charge."}])
+    answer, _ = await run_agent([_msg("user", "Categorise my Netflix charge.")])
 
     assert answer == "This is an entertainment expense."
 
@@ -177,7 +181,7 @@ async def test_categorise_expense_triggers_two_llm_calls(mock_llm: MagicMock) ->
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    await run_agent([{"role": "user", "content": "What category is my rent?"}])
+    await run_agent([_msg("user", "What category is my rent?")])
 
     assert mock_llm.invoke.call_count == 2
 
@@ -186,8 +190,6 @@ async def test_categorise_expense_triggers_two_llm_calls(mock_llm: MagicMock) ->
 
 
 async def test_tool_exception_agent_still_responds(mock_llm: MagicMock) -> None:
-    # get_quote with empty ticker raises ToolException; ToolNode wraps it as an
-    # error ToolMessage so the agent can still produce a graceful response.
     mock_llm.invoke.side_effect = [
         _make_tool_call_msg("get_quote", {"ticker": ""}),
         AIMessage(content="I could not retrieve a quote for that ticker."),
@@ -195,7 +197,7 @@ async def test_tool_exception_agent_still_responds(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([{"role": "user", "content": "Price of empty ticker?"}])
+    answer, _ = await run_agent([_msg("user", "Price of empty ticker?")])
 
     assert isinstance(answer, str)
     assert len(answer) > 0
@@ -209,9 +211,8 @@ async def test_tool_exception_triggers_second_llm_call(mock_llm: MagicMock) -> N
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    await run_agent([{"role": "user", "content": "Price of ''?"}])
+    await run_agent([_msg("user", "")])
 
-    # error ToolMessage loops back to agent for a second invoke
     assert mock_llm.invoke.call_count == 2
 
 
@@ -225,9 +226,9 @@ async def test_with_session_id_only_last_message_reaches_llm(mock_llm: MagicMock
 
     await run_agent(
         [
-            {"role": "user", "content": "first turn"},
-            {"role": "assistant", "content": "response"},
-            {"role": "user", "content": "second turn"},
+            _msg("user", "first turn"),
+            _msg("assistant", "response"),
+            _msg("user", "second turn"),
         ],
         session_id="sess-abc",
     )
@@ -245,9 +246,9 @@ async def test_without_session_id_all_messages_reach_llm(mock_llm: MagicMock) ->
 
     await run_agent(
         [
-            {"role": "user", "content": "first turn"},
-            {"role": "assistant", "content": "response"},
-            {"role": "user", "content": "second turn"},
+            _msg("user", "first turn"),
+            _msg("assistant", "response"),
+            _msg("user", "second turn"),
         ],
     )
 
@@ -265,7 +266,7 @@ async def test_returns_str_and_dict_tuple(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    result = await run_agent([{"role": "user", "content": "hi"}])
+    result = await run_agent([_msg("user", "hi")])
 
     assert isinstance(result, tuple) and len(result) == 2
     answer, usage = result
@@ -278,7 +279,7 @@ async def test_usage_empty_when_no_metadata(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    _, usage = await run_agent([{"role": "user", "content": "hi"}])
+    _, usage = await run_agent([_msg("user", "hi")])
 
     assert usage == {}
 
@@ -293,7 +294,7 @@ async def test_usage_populated_when_metadata_present(mock_llm: MagicMock) -> Non
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    _, usage = await run_agent([{"role": "user", "content": "hi"}])
+    _, usage = await run_agent([_msg("user", "hi")])
 
     assert usage.get("input_tokens") == 10
     assert usage.get("output_tokens") == 20

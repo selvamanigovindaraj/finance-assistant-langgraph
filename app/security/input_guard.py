@@ -53,3 +53,14 @@ class InputGuard:
     def _check_injection(self, _text: str) -> None:
         """Raise if the message contains prompt-injection patterns."""
         raise NotImplementedError
+
+
+_instance: InputGuard | None = None
+
+
+def get_input_guard() -> InputGuard:
+    """Return the process-wide InputGuard singleton (lazy init)."""
+    global _instance
+    if _instance is None:
+        _instance = InputGuard()
+    return _instance
