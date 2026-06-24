@@ -7,6 +7,7 @@ RUN pip install uv
 
 COPY pyproject.toml .
 RUN uv sync --no-dev
+RUN uv run python -m spacy download en_core_web_lg
 
 COPY app/ ./app/
 

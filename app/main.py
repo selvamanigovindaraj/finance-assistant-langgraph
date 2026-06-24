@@ -10,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.adaptive_router import init_graph, run_agent
 from app.config import settings
 from app.models import ChatRequest, ChatResponse, FeedbackRequest, FeedbackResponse
+from app.security.input_guard import InputGuard
+
+_guard = InputGuard()
 
 
 def _configure_langsmith() -> None:
@@ -87,6 +90,7 @@ async def chat(body: ChatRequest) -> ChatResponse:
     if not body.messages:
         raise HTTPException(status_code=422, detail="messages must not be empty")
 
+    body = await _guard.check(body)
     messages = [{"role": m.role.value, "content": m.content} for m in body.messages]
 
     try:

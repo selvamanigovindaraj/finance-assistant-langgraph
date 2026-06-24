@@ -36,7 +36,6 @@ def test_empty_or_whitespace_ticker_raises(ticker: str) -> None:
         _fn(ticker=ticker)
 
 
-
 @pytest.mark.parametrize(
     ("raw", "normalized"),
     [
