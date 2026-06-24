@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 import app.agents.adaptive_router as _router_mod
 from app.agents.adaptive_router import init_graph, run_agent
 
-_PATCH_LLM = "app.agents.adaptive_router.ChatAnthropic"
+_PATCH_LLM = "app.agents.adaptive_router.ChatOpenAI"
 _PATCH_YF = "app.agents.tools.financial_data.yf.Ticker"
 
 _VALID_YF_INFO: dict[str, Any] = {

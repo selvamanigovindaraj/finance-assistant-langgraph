@@ -4,10 +4,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Anthropic
-    ANTHROPIC_API_KEY: str = ""
-    CLAUDE_GENERATION_MODEL: str = "claude-sonnet-4-6"
-    CLAUDE_ROUTING_MODEL: str = "claude-haiku-4-5-20251001"
+    # OpenAI
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     # Pinecone
     PINECONE_API_KEY: str = ""

@@ -3,9 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import StateGraph
 from langgraph.graph.message import MessagesState
@@ -35,11 +35,9 @@ _graph: CompiledStateGraph[Any, Any, Any] | None = None
 
 
 def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
-    llm = ChatAnthropic(
-        model_name=settings.CLAUDE_GENERATION_MODEL,
-        api_key=SecretStr(settings.ANTHROPIC_API_KEY),
-        timeout=None,
-        stop=None,
+    llm = ChatOpenAI(
+        model=settings.OPENAI_MODEL,
+        api_key=SecretStr(settings.OPENAI_API_KEY),
     ).bind_tools(_TOOLS)
 
     def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
