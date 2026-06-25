@@ -15,23 +15,12 @@ from pydantic import SecretStr
 
 from app.agents.tools.financial_data import budget_calc, categorise_expense, get_quote
 from app.config import settings
-from app.prompts.templates import AGENT_DISCLAIMER, AGENT_SYSTEM_PROMPT
+from app.models import FinanceResponse
+from app.prompts.templates import AGENT_SYSTEM_PROMPT
 
 _TOOLS = [get_quote, budget_calc, categorise_expense]
 
 _graph: CompiledStateGraph[Any, Any, Any] | None = None
-
-
-def _guardrail_out(state: MessagesState) -> dict[str, list[BaseMessage]]:
-    last = cast(AIMessage, state["messages"][-1])
-    raw = last.content
-    safe_content = raw if isinstance(raw, str) else str(raw)
-    disclaimed = AIMessage(
-        id=last.id,
-        content=safe_content + AGENT_DISCLAIMER,
-        usage_metadata=last.usage_metadata,
-    )
-    return {"messages": [disclaimed]}
 
 
 def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any]:
@@ -41,20 +30,18 @@ def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[A
         base_url=settings.DEEPSEEK_ENDPOINT,
     ).bind_tools(_TOOLS)
 
-    def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
-        sys_msg: BaseMessage = SystemMessage(content=AGENT_SYSTEM_PROMPT)
-        messages: list[BaseMessage] = [sys_msg] + cast(list[BaseMessage], state["messages"])
-        response = llm.invoke(messages, config)
-        return {"messages": [response]}
+    def _agent_node(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
+        messages: list[BaseMessage] = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + cast(
+            list[BaseMessage], state["messages"]
+        )
+        return {"messages": [llm.invoke(messages, config)]}
 
     graph = StateGraph(MessagesState)
-    graph.add_node("agent", call_model)
+    graph.add_node("agent", _agent_node)
     graph.add_node("tools", ToolNode(_TOOLS, handle_tool_errors=True))
-    graph.add_node("guardrail_out", _guardrail_out)
     graph.set_entry_point("agent")
-    graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: "guardrail_out"})
+    graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
     graph.add_edge("tools", "agent")
-    graph.add_edge("guardrail_out", END)
     return graph.compile(checkpointer=checkpointer)
 
 
@@ -70,24 +57,47 @@ def _to_lc(msg: dict[str, str]) -> BaseMessage:
     return AIMessage(content=msg["content"])
 
 
-async def run_agent(
-    messages: list[dict[str, str]], session_id: str = ""
-) -> tuple[str, dict[str, Any]]:
-    """Invoke the compiled graph and return (answer_text, usage_metadata)."""
-    assert _graph is not None, "init_graph() must be called before run_agent()"
-
+def _make_invoke_args(
+    messages: list[dict[str, str]], session_id: str
+) -> tuple[list[BaseMessage], RunnableConfig]:
+    """Return (messages, config) ready for graph.ainvoke."""
     if session_id:
-        lc_messages: list[BaseMessage] = [_to_lc(messages[-1])]
-        config: RunnableConfig = {
+        return [_to_lc(messages[-1])], {
             "configurable": {"thread_id": session_id},
             "metadata": {"session_id": session_id},
         }
-    else:
-        lc_messages = [_to_lc(m) for m in messages]
-        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    return [_to_lc(m) for m in messages], {"configurable": {"thread_id": str(uuid.uuid4())}}
 
+
+def _parse_result(
+    all_msgs: list[BaseMessage],
+) -> tuple[FinanceResponse, dict[str, Any]]:
+    """Extract answer, tool_used and usage from the completed message list."""
+    last_tool_name: str | None = None
+    for msg in reversed(all_msgs):
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            last_tool_name = msg.tool_calls[-1]["name"]
+            break
+
+    last_ai = next(
+        (m for m in reversed(all_msgs) if isinstance(m, AIMessage) and not m.tool_calls),
+        None,
+    )
+    raw = last_ai.content if last_ai else ""
+    usage: dict[str, Any] = (
+        dict(last_ai.usage_metadata) if last_ai and last_ai.usage_metadata else {}
+    )
+    return FinanceResponse(
+        answer=raw if isinstance(raw, str) else str(raw),
+        tool_used=last_tool_name,
+    ), usage
+
+
+async def run_agent(
+    messages: list[dict[str, str]], session_id: str = ""
+) -> tuple[FinanceResponse, dict[str, Any]]:
+    """Invoke the compiled graph and return (FinanceResponse, usage_metadata)."""
+    assert _graph is not None, "init_graph() must be called before run_agent()"
+    lc_messages, config = _make_invoke_args(messages, session_id)
     result = await _graph.ainvoke({"messages": lc_messages}, config)
-    last: AIMessage = result["messages"][-1]
-    usage: dict[str, Any] = dict(last.usage_metadata) if last.usage_metadata else {}
-    content = last.content
-    return content if isinstance(content, str) else str(content), usage
+    return _parse_result(cast(list[BaseMessage], result["messages"]))

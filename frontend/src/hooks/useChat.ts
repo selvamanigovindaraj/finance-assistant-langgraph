@@ -36,6 +36,8 @@ export function useChat(): UseChatReturn {
           id: crypto.randomUUID(),
           role: "assistant",
           content: res.answer,
+          disclaimer: res.disclaimer || undefined,
+          tool_used: res.tool_used ?? undefined,
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, assistantMsg]);

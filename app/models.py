@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.prompts.templates import AGENT_DISCLAIMER
+
 
 class Role(StrEnum):
     user = "user"
@@ -35,10 +37,20 @@ class Source(BaseModel):
     snippet: str = ""
 
 
+class FinanceResponse(BaseModel):
+    """Structured LLM output for the finance agent."""
+
+    answer: str
+    disclaimer: str = AGENT_DISCLAIMER
+    tool_used: str | None = None
+
+
 class ChatResponse(BaseModel):
     """Response returned by the chat endpoint."""
 
     answer: str
+    disclaimer: str = ""
+    tool_used: str | None = None
     sources: list[Source] = []
     session_id: str = ""
     usage: dict[str, Any] = {}

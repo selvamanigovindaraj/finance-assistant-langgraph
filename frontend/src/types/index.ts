@@ -5,6 +5,8 @@ export interface Message {
   role: Role;
   content: string;
   sources?: Source[];
+  disclaimer?: string;
+  tool_used?: string;
   timestamp: string;
 }
 

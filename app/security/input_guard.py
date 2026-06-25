@@ -5,7 +5,6 @@ import logging
 import re
 from typing import Literal
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
@@ -14,7 +13,7 @@ from pydantic import BaseModel, SecretStr
 
 from app.config import settings
 from app.models import ChatRequest, Message, Role
-from app.prompts.templates import INJECTION_JUDGE_SYSTEM, INJECTION_JUDGE_USER
+from app.prompts.templates import INJECTION_JUDGE_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +56,11 @@ class InputGuard:
     def __init__(self) -> None:
         self._analyzer = AnalyzerEngine()
         self._anonymizer = AnonymizerEngine()  # type: ignore[no-untyped-call]
+        self._judge = ChatOpenAI(
+            model=settings.DEEPSEEK_MODEL,
+            api_key=SecretStr(settings.DEEPSEEK_API_KEY),
+            base_url=settings.DEEPSEEK_ENDPOINT,
+        ).with_structured_output(InjectionVerdict, method="json_mode")
 
     async def check(self, request: ChatRequest) -> ChatRequest:
         """Redact PII from user messages and return the sanitised request."""
@@ -77,7 +81,8 @@ class InputGuard:
 
     def _sanitise(self, text: str) -> str:
         """Replace PII entities with typed placeholders."""
-        results = self._analyzer.analyze(text=text, entities=_PII_ENTITIES, language="en")
+        # spaCy NER requires capitalised proper nouns; .title() preserves char positions
+        results = self._analyzer.analyze(text=text.title(), entities=_PII_ENTITIES, language="en")
         anonymized = self._anonymizer.anonymize(
             text=text,
             analyzer_results=results,  # type: ignore[arg-type]
@@ -96,19 +101,12 @@ class InputGuard:
 
     async def _check_injection_llm(self, text: str) -> None:
         """Call the Deepseek judge; raise PromptInjectionError if injection is detected."""
-        judge = ChatOpenAI(
-            model=settings.DEEPSEEK_MODEL,
-            api_key=SecretStr(settings.DEEPSEEK_API_KEY),
-            base_url=settings.DEEPSEEK_ENDPOINT,
-        ).with_structured_output(InjectionVerdict)
-
-        user_content = INJECTION_JUDGE_USER.format(text=text)
         try:
-            verdict: InjectionVerdict = await judge.ainvoke(  # type: ignore[assignment]
-                [SystemMessage(content=INJECTION_JUDGE_SYSTEM), HumanMessage(content=user_content)]
+            verdict: InjectionVerdict = await self._judge.ainvoke(  # type: ignore[assignment]
+                INJECTION_JUDGE_PROMPT.format_messages(text=text)
             )
-        except Exception:
-            logger.warning("LLM injection judge failed; falling back to regex-only")
+        except Exception as exc:
+            logger.warning("LLM injection judge failed; falling back to regex-only: %s", exc)
             return
 
         if verdict.is_injection:

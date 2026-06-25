@@ -31,12 +31,12 @@ async def chat(
     messages = [{"role": m.role.value, "content": m.content} for m in body.messages]
 
     try:
-        answer, usage = await run_agent(messages, session_id=body.session_id)
+        finance_response, usage = await run_agent(messages, session_id=body.session_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return ChatResponse(
-        answer=answer,
+        **finance_response.model_dump(),
         session_id=body.session_id,
         usage=usage,
     )

@@ -10,7 +10,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 import app.agents.adaptive_router as _router_mod
 from app.agents.adaptive_router import init_graph, run_agent
-from app.prompts.templates import AGENT_DISCLAIMER as _DISCLAIMER
+from app.models import FinanceResponse
+from app.prompts.templates import AGENT_DISCLAIMER as _DISCLAIMER_TEXT
 
 _PATCH_LLM = "app.agents.adaptive_router.ChatOpenAI"
 _PATCH_YF = "app.agents.tools.financial_data.yf.Ticker"
@@ -71,9 +72,9 @@ async def test_direct_response_returns_answer(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([_msg("user", "What is inflation?")])
+    finance_response, _ = await run_agent([_msg("user", "What is inflation?")])
 
-    assert answer.startswith("Inflation is a rise in prices.")
+    assert finance_response.answer.startswith("Inflation is a rise in prices.")
 
 
 async def test_direct_response_llm_invoked_once(mock_llm: MagicMock) -> None:
@@ -89,17 +90,17 @@ async def test_direct_response_llm_invoked_once(mock_llm: MagicMock) -> None:
 # ─── Output guardrail ──────────────────────────────────────────────────────────
 
 
-async def test_disclaimer_appended_to_every_response(mock_llm: MagicMock) -> None:
+async def test_disclaimer_present_in_finance_response(mock_llm: MagicMock) -> None:
     mock_llm.invoke.return_value = AIMessage(content="Some financial insight.")
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([_msg("user", "Tell me about bonds.")])
+    finance_response, _ = await run_agent([_msg("user", "Tell me about bonds.")])
 
-    assert answer.endswith(_DISCLAIMER)
+    assert finance_response.disclaimer == _DISCLAIMER_TEXT
 
 
-async def test_disclaimer_appended_after_tool_response(mock_llm: MagicMock) -> None:
+async def test_disclaimer_present_after_tool_call(mock_llm: MagicMock) -> None:
     mock_llm.invoke.side_effect = [
         _make_tool_call_msg("get_quote", {"ticker": "AAPL"}),
         AIMessage(content="AAPL is $150."),
@@ -108,9 +109,9 @@ async def test_disclaimer_appended_after_tool_response(mock_llm: MagicMock) -> N
         init_graph(InMemorySaver())
 
     with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
-        answer, _ = await run_agent([_msg("user", "Price of AAPL?")])
+        finance_response, _ = await run_agent([_msg("user", "Price of AAPL?")])
 
-    assert answer.endswith(_DISCLAIMER)
+    assert finance_response.disclaimer == _DISCLAIMER_TEXT
 
 
 # ─── get_quote routing ─────────────────────────────────────────────────────────
@@ -125,9 +126,23 @@ async def test_routes_to_get_quote(mock_llm: MagicMock) -> None:
         init_graph(InMemorySaver())
 
     with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
-        answer, _ = await run_agent([_msg("user", "What is the price of AAPL?")])
+        finance_response, _ = await run_agent([_msg("user", "What is the price of AAPL?")])
 
-    assert answer.startswith("AAPL is trading at $150.")
+    assert finance_response.answer.startswith("AAPL is trading at $150.")
+
+
+async def test_get_quote_tool_used_populated(mock_llm: MagicMock) -> None:
+    mock_llm.invoke.side_effect = [
+        _make_tool_call_msg("get_quote", {"ticker": "AAPL"}),
+        AIMessage(content="AAPL is trading at $150."),
+    ]
+    with patch(_PATCH_LLM, return_value=mock_llm):
+        init_graph(InMemorySaver())
+
+    with patch(_PATCH_YF, return_value=_make_yf_ticker(_VALID_YF_INFO)):
+        finance_response, _ = await run_agent([_msg("user", "Price of AAPL?")])
+
+    assert finance_response.tool_used == "get_quote"
 
 
 async def test_get_quote_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
@@ -158,9 +173,9 @@ async def test_routes_to_budget_calc(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([_msg("user", "Analyse my budget.")])
+    finance_response, _ = await run_agent([_msg("user", "Analyse my budget.")])
 
-    assert answer.startswith("Your monthly surplus is $3000.")
+    assert finance_response.answer.startswith("Your monthly surplus is $3000.")
 
 
 async def test_budget_calc_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
@@ -193,9 +208,9 @@ async def test_routes_to_categorise_expense(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([_msg("user", "Categorise my Netflix charge.")])
+    finance_response, _ = await run_agent([_msg("user", "Categorise my Netflix charge.")])
 
-    assert answer.startswith("This is an entertainment expense.")
+    assert finance_response.answer.startswith("This is an entertainment expense.")
 
 
 async def test_categorise_expense_triggers_two_llm_calls(mock_llm: MagicMock) -> None:
@@ -225,10 +240,10 @@ async def test_tool_exception_agent_still_responds(mock_llm: MagicMock) -> None:
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
 
-    answer, _ = await run_agent([_msg("user", "Price of empty ticker?")])
+    finance_response, _ = await run_agent([_msg("user", "Price of empty ticker?")])
 
-    assert isinstance(answer, str)
-    assert len(answer) > 0
+    assert isinstance(finance_response.answer, str)
+    assert len(finance_response.answer) > 0
 
 
 async def test_tool_exception_triggers_second_llm_call(mock_llm: MagicMock) -> None:
@@ -289,7 +304,7 @@ async def test_without_session_id_all_messages_reach_llm(mock_llm: MagicMock) ->
 # ─── Return shape ──────────────────────────────────────────────────────────────
 
 
-async def test_returns_str_and_dict_tuple(mock_llm: MagicMock) -> None:
+async def test_returns_finance_response_and_dict_tuple(mock_llm: MagicMock) -> None:
     mock_llm.invoke.return_value = AIMessage(content="answer")
     with patch(_PATCH_LLM, return_value=mock_llm):
         init_graph(InMemorySaver())
@@ -297,8 +312,8 @@ async def test_returns_str_and_dict_tuple(mock_llm: MagicMock) -> None:
     result = await run_agent([_msg("user", "hi")])
 
     assert isinstance(result, tuple) and len(result) == 2
-    answer, usage = result
-    assert isinstance(answer, str)
+    finance_response, usage = result
+    assert isinstance(finance_response, FinanceResponse)
     assert isinstance(usage, dict)
 
 
