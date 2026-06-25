@@ -81,7 +81,7 @@ The graph is **not** compiled at module import. Instead:
 1. `app/main.py` lifespan starts → checks `settings.DATABASE_URL`
 2. If set: opens a `psycopg3` async connection pool → creates `AsyncPostgresSaver` → calls `setup()` (idempotent; creates LangGraph's three Postgres tables) → calls `init_graph(checkpointer)`
 3. If not set: falls back to `InMemorySaver` → calls `init_graph(checkpointer)`
-4. `_graph` and `_llm` start as `None`; an `assert` guard in `run_agent` prevents use before init
+4. `_graph` starts as `None`; an `assert` guard in `run_agent` prevents use before init
 
 **Why only the last message is sent from the frontend:** `MessagesState` uses an `add_messages` reducer that *appends* — it does not replace. Sending the full history on every turn would duplicate messages on top of what the checkpointer already restored. Only the new user message is sent; the checkpointer merges it with the stored history automatically.
 
@@ -92,7 +92,7 @@ The graph is **not** compiled at module import. Instead:
 
 ### LangSmith tracing
 
-`_configure_langsmith()` in `app/main.py` sets `LANGCHAIN_TRACING_V2` and `LANGSMITH_TRACING` env vars at startup from `settings`. Each `ainvoke` creates one LangSmith trace. Traces for the same session are grouped in the **Threads** tab (not the Traces tab) via `metadata: {session_id}` in `RunnableConfig`. The `config` is also forwarded to `_llm.invoke()` inside `_agent_node` so child spans inherit it.
+`_configure_langsmith()` in `app/main.py` sets `LANGCHAIN_TRACING_V2` and `LANGSMITH_TRACING` env vars at startup from `settings`. Each `ainvoke` creates one LangSmith trace. Traces for the same session are grouped in the **Threads** tab (not the Traces tab) via `metadata: {session_id}` in `RunnableConfig`. The `config` is also forwarded to `llm.invoke()` inside `_agent_node` so child spans inherit it.
 
 ### Key design boundaries
 
@@ -100,8 +100,8 @@ The graph is **not** compiled at module import. Instead:
 - **`app/db.py`** — `open_pool` / `close_pool` helpers for the psycopg3 async connection pool. Pool uses `autocommit=True` (required for `CREATE INDEX CONCURRENTLY` in `setup()`) and `dict_row` row factory.
 - **`app/models.py`** — all API boundary types. `FinanceResponse(answer, disclaimer, tool_used)` is built by `run_agent()` after graph completion — it is never stored in LangGraph state (which would cause msgpack serialisation warnings on checkpoint restore). `ChatResponse` mirrors its fields and is returned by the chat endpoint.
 - **`app/prompts/templates.py`** — all prompt constants in one place. `AGENT_SYSTEM_PROMPT` is prepended to every LLM call by `_agent_node`. `AGENT_DISCLAIMER` is the inline string attached as the `disclaimer` field on every `FinanceResponse`. `INJECTION_JUDGE_PROMPT` is the few-shot `ChatPromptTemplate` used by the LLM injection judge — its system message **must contain the word "json"** (Deepseek's `json_object` mode rejects requests without it).
-- **`app/agents/adaptive_router.py`** — module-level `_graph` and `_llm` are both set by `init_graph(checkpointer)`. `_agent_node` is a module-level function (not a closure) that references `_llm` directly. `_make_invoke_args` builds the message list and `RunnableConfig` for session vs. non-session calls. `_parse_result` walks the completed message list to extract answer, last tool name, and usage. `run_agent` is 3 lines. **The `AGENT_SYSTEM_PROMPT` must explicitly name each tool and when to call it** — `bind_tools` only makes tools available; the LLM will self-answer unless the prompt instructs otherwise.
-- **`app/security/input_guard.py`** — `InputGuard.check()` runs three steps in order: (1) fast regex pre-filter against 12 injection patterns, (2) Deepseek LLM judge via `with_structured_output(InjectionVerdict, method="json_mode")` — fails open on exception so the regex layer already provides a safety net, (3) Presidio PII redaction. Always use `method="json_mode"` when calling Deepseek's `with_structured_output` — it does not support the default strict JSON-schema mode.
+- **`app/agents/adaptive_router.py`** — only `_graph` is a module-level global, set by `init_graph(checkpointer)`. `_build_graph` creates the `ChatOpenAI` LLM locally and defines `_agent_node` as a nested closure that captures it — this eliminates the need for a module-level `_llm`. `_make_invoke_args` builds the message list and `RunnableConfig` for session vs. non-session calls. `_parse_result` walks the completed message list to extract answer, last tool name, and usage. `run_agent` is 3 lines. **The `AGENT_SYSTEM_PROMPT` must explicitly name each tool and when to call it** — `bind_tools` only makes tools available; the LLM will self-answer unless the prompt instructs otherwise.
+- **`app/security/input_guard.py`** — `InputGuard.check()` runs three steps in order: (1) fast regex pre-filter against 12 injection patterns, (2) Deepseek LLM judge (`self._judge`) — instantiated once in `__init__` via `with_structured_output(InjectionVerdict, method="json_mode")`; fails open on exception so the regex layer already provides a safety net, (3) Presidio PII redaction. Presidio's spaCy NER only recognises PERSON entities when names are capitalised — `_sanitise` analyses `text.title()` (preserves char positions) and anonymises the original `text`. Always use `method="json_mode"` when calling Deepseek's `with_structured_output` — it does not support the default strict JSON-schema mode.
 - **`app/components/retriever.py`** — `PineconeRetriever` stub; implement `retrieve()` and `add_documents()` here before wiring into the RAG pipeline.
 - **`app/services/rag_pipeline.py`** — intended orchestrator: retriever → context assembly → LLM. Not yet wired into `/chat`.
 
