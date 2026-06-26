@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
+    # Groq
+    GROQ_API_KEY: str = ""
+    GROQ_GUARD_MODEL: str = "meta-llama/llama-prompt-guard-2-22m"
+    GROQ_RESTORE_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_INJECTION_THRESHOLD: float = 0.5
+
     # Deepseek
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-v4-flash"

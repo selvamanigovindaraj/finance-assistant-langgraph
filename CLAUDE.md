@@ -139,6 +139,10 @@ These principles apply to all generated code, in every language:
 - **Separation of Concerns** — Each module, class, or function should have one reason to change. Keep I/O, business logic, and presentation in separate layers so each can be tested and changed independently.
 - **Law of Demeter** — A unit should interact only with its immediate collaborators. Avoid chaining through internal structure (`a.b.c.do()`); pass what is needed or expose a higher-level method instead.
 
+## Workflow skills
+
+- **ponytail** — Run `/ponytail` before planning and before writing any code. It enforces the laziest solution that actually works: question whether the task needs to exist at all, reach for stdlib before custom code, one line before fifty. If the output suggests a simpler path, take it before proceeding.
+
 ## Code style (from `.claude/rules/`)
 
 **Python**
