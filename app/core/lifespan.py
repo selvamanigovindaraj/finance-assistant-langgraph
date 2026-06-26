@@ -5,9 +5,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from app.agents.adaptive_router import init_graph
 from app.config import settings
+from app.security.pii_store import init_pii_store
 
 
 def configure_langsmith() -> None:
@@ -35,8 +37,10 @@ def configure_langsmith() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Configure tracing and initialise the LangGraph checkpointer on startup."""
+    """Configure tracing, Redis, and the LangGraph checkpointer on startup."""
     configure_langsmith()
+
+    init_pii_store(Redis.from_url(settings.REDIS_URL, decode_responses=False))
 
     if settings.DATABASE_URL:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver

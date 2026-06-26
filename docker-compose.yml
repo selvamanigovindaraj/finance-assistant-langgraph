@@ -24,6 +24,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://agent:agent@postgres:5432/agent_db
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ./app:/app/app          # live-reload: local edits reflected immediately
       - ./data:/app/data:ro
@@ -31,6 +32,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   frontend:

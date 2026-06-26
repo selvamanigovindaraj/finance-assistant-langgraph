@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = ""
     LANGSMITH_ENDPOINT: str = ""
 
+    # Redis (optional — PII store disabled when empty)
+    REDIS_URL: str = ""
+
     # Postgres (optional — falls back to InMemorySaver when empty)
     DATABASE_URL: str = ""
 
