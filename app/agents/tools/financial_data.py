@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -96,6 +98,18 @@ _KEYWORDS: dict[str, list[str]] = {
 }
 
 
+def _fetch_yf_info(symbol: str) -> dict[str, Any]:
+    """Fetch yfinance ticker info; retries up to 3 times on transient OSError."""
+    for attempt in range(3):
+        try:
+            return yf.Ticker(symbol).info or {}
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(0.5 * (2**attempt) + random.uniform(0, 0.5))
+    return {}  # ponytail: unreachable; satisfies mypy
+
+
 def _keyword_classify(description: str) -> str | None:
     lower = description.lower()
     for category, keywords in _KEYWORDS.items():
@@ -112,8 +126,7 @@ def get_quote(ticker: str) -> dict[str, Any]:
         raise ToolException("Ticker symbol must be a non-empty string.")
 
     try:
-        stock = yf.Ticker(symbol)
-        info: dict[str, Any] = stock.info or {}
+        info: dict[str, Any] = _fetch_yf_info(symbol)
 
         market_price = info.get("regularMarketPrice")
         price = market_price if market_price is not None else info.get("previousClose")

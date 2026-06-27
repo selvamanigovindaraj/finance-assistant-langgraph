@@ -187,6 +187,7 @@ These principles apply to all generated code, in every language:
 
 ## Workflow skills
 
+- **TDD** — Write the failing test first, then write the minimum code to make it pass. Never touch production code without a corresponding test written beforehand. If a task has no clear testable unit, ask before proceeding.
 - **ponytail** — Run `/ponytail` before planning and before writing any code. It enforces the laziest solution that actually works: question whether the task needs to exist at all, reach for stdlib before custom code, one line before fifty. If the output suggests a simpler path, take it before proceeding.
 
 ## Code style (from `.claude/rules/`)

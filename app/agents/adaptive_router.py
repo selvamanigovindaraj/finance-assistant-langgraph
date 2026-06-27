@@ -28,6 +28,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[A
         model=settings.DEEPSEEK_MODEL,
         api_key=SecretStr(settings.DEEPSEEK_API_KEY),
         base_url=settings.DEEPSEEK_ENDPOINT,
+        max_retries=3,
     ).bind_tools(_TOOLS)
 
     def _agent_node(state: MessagesState, config: RunnableConfig) -> dict[str, list[BaseMessage]]:

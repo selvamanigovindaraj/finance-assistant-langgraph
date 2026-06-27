@@ -241,10 +241,12 @@ def test_invalid_timestamp_falls_back_to_now(bad_ts: Any) -> None:
     ids=["ValueError", "ConnectionError", "RuntimeError", "KeyError"],
 )
 def test_yfinance_exceptions_wrapped_as_tool_exception(exc: Exception) -> None:
-    with patch(_PATCH) as mock_cls:
+    expected_calls = 3 if isinstance(exc, OSError) else 1
+    with patch("time.sleep"), patch(_PATCH) as mock_cls:
         mock_cls.side_effect = exc
         with pytest.raises(ToolException, match='Unable to fetch a live price for ticker "AAPL"'):
             _fn(ticker="AAPL")
+    assert mock_cls.call_count == expected_calls
 
 
 def test_ticker_info_none_treated_as_empty_dict() -> None:
