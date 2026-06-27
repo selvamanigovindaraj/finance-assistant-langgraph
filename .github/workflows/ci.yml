@@ -34,5 +34,3 @@ jobs:
           DEEPSEEK_ENDPOINT: https://placeholder
           GROQ_API_KEY: placeholder
           REDIS_URL: redis://localhost:6379
-          PINECONE_API_KEY: placeholder
-          TAVILY_API_KEY: placeholder
