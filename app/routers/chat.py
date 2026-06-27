@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.adaptive_router import run_agent
+from app.core.rate_limiter import RATE_LIMITED_MSG, is_allowed
 from app.models import ChatRequest, ChatResponse
 from app.security.input_guard import InputGuard, PromptInjectionError, get_input_guard
 from app.security.output_filter import OutputGuard, get_output_guard
@@ -33,6 +34,10 @@ async def chat(
         return ChatResponse(answer=_INJECTION_REFUSAL, session_id=body.session_id, usage={})
 
     session_id = sanitised_body.session_id
+
+    if not await is_allowed(session_id):
+        return ChatResponse(answer=RATE_LIMITED_MSG, session_id=session_id, usage={})
+
     await pii_store.merge(session_id, pii_pairs)
 
     messages = [{"role": m.role.value, "content": m.content} for m in sanitised_body.messages]
