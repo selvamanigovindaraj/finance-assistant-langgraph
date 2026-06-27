@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -51,6 +51,11 @@ def init_graph(checkpointer: BaseCheckpointSaver[Any]) -> None:
     _graph = _build_graph(checkpointer)
 
 
+def is_initialized() -> bool:
+    """Return True if init_graph() has been called."""
+    return _graph is not None
+
+
 def _to_lc(msg: dict[str, str]) -> BaseMessage:
     if msg["role"] == "user":
         return HumanMessage(content=msg["content"])
@@ -79,6 +84,8 @@ def _parse_result(
             last_tool_name = msg.tool_calls[-1]["name"]
             break
 
+    last_tool_msg = next((m for m in reversed(all_msgs) if isinstance(m, ToolMessage)), None)
+
     last_ai = next(
         (m for m in reversed(all_msgs) if isinstance(m, AIMessage) and not m.tool_calls),
         None,
@@ -87,6 +94,8 @@ def _parse_result(
     usage: dict[str, Any] = (
         dict(last_ai.usage_metadata) if last_ai and last_ai.usage_metadata else {}
     )
+    if last_tool_msg is not None:
+        usage["tool_output"] = str(last_tool_msg.content)
     return FinanceResponse(
         answer=raw if isinstance(raw, str) else str(raw),
         tool_used=last_tool_name,

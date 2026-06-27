@@ -146,7 +146,7 @@ def test_non_numeric_price_string_raises_tool_exception() -> None:
     info = {**_VALID_INFO, "regularMarketPrice": "N/A"}
     with patch(_PATCH) as mock_cls:
         mock_cls.return_value = _make_ticker(info)
-        with pytest.raises(ToolException, match='Failed to fetch quote for ticker "AAPL"'):
+        with pytest.raises(ToolException, match='Unable to fetch a live price for ticker "AAPL"'):
             _fn(ticker="AAPL")
 
 
@@ -243,7 +243,7 @@ def test_invalid_timestamp_falls_back_to_now(bad_ts: Any) -> None:
 def test_yfinance_exceptions_wrapped_as_tool_exception(exc: Exception) -> None:
     with patch(_PATCH) as mock_cls:
         mock_cls.side_effect = exc
-        with pytest.raises(ToolException, match='Failed to fetch quote for ticker "AAPL"'):
+        with pytest.raises(ToolException, match='Unable to fetch a live price for ticker "AAPL"'):
             _fn(ticker="AAPL")
 
 

@@ -63,6 +63,7 @@ _KEYWORDS: dict[str, list[str]] = {
         "concert",
         "ticket",
         "gym",
+        "fitness",
         "gaming",
         "streaming",
     ],
@@ -84,6 +85,7 @@ _KEYWORDS: dict[str, list[str]] = {
         "savings",
         "investment",
         "401k",
+        "401(k)",
         "ira",
         "pension",
         "retirement",
@@ -137,7 +139,7 @@ def get_quote(ticker: str) -> dict[str, Any]:
     except ToolException:
         raise
     except Exception as exc:
-        raise ToolException(f'Failed to fetch quote for ticker "{symbol}": {exc}') from exc
+        raise ToolException(f'Unable to fetch a live price for ticker "{symbol}".') from exc
 
 
 @tool
