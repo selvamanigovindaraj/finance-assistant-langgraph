@@ -6,7 +6,7 @@
 - Prefer `pydantic` models over plain `dict` for all API boundaries.
 - Format with `ruff format`; lint with `ruff check`.
 - Type-annotate every function signature; no `Any` unless unavoidable.
-- Docstrings: one-line summary only — no multi-paragraph blocks.
+- Docstrings: two lines maximum — summary on the first line, optional detail on the second; no multi-paragraph blocks.
 
 ## TypeScript / React
 - Functional components only; no class components.

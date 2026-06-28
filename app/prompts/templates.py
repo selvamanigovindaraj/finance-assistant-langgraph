@@ -19,6 +19,21 @@ AGENT_DISCLAIMER: str = (
     "\n\n⚠️ This is for informational purposes only and does not constitute financial advice."
 )
 
+SUMMARIZE_SYSTEM_PROMPT: str = (
+    "You are a state-management engine for an AI agent. "
+    "You will receive a transcript of the newest conversation turns.\n"
+    "Your job is to produce a compact Action Ledger with exactly two sections:\n\n"
+    "## Facts & Constraints Learned\n"
+    "Bullet list of user data, amounts, preferences, and constraints discovered.\n\n"
+    "## Actions Taken\n"
+    "One bullet per tool call:\n"
+    "  - Tool: <name> | Params: <exact params> | Result: <concrete data or error>\n\n"
+    "CRITICAL: Always record EXACT parameter values and CONCRETE results "
+    "(actual numbers, amounts, categories, errors). "
+    "Never write vague phrases like 'the tool returned data'. "
+    "Prioritise entities, numbers, and exact technical terms over conversational filler."
+)
+
 
 OUTPUT_GUARD_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
     [

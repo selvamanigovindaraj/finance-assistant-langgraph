@@ -197,7 +197,7 @@ These principles apply to all generated code, in every language:
 - `TYPE_CHECKING` guards only for genuine circular imports or types that don't exist at runtime. Do NOT use them merely to defer a heavy import — `from __future__ import annotations` already makes all annotations lazy strings.
 - `ruff format` + `ruff check` (line length 100, rules: E F I UP B SIM).
 - `mypy --strict` must pass.
-- One-line docstrings only.
+- Docstrings: two lines maximum — summary on the first line, optional detail on the second; no multi-paragraph blocks.
 
 **TypeScript**
 - Functional components; explicit return types on all exports.

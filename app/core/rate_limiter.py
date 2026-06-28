@@ -10,8 +10,7 @@ _AnyRedis = Any
 _redis: _AnyRedis = None
 
 RATE_LIMITED_MSG = (
-    "You've reached the limit of 10 requests per minute. "
-    "Please wait a moment and try again."
+    "You've reached the limit of 10 requests per minute. Please wait a moment and try again."
 )
 
 
